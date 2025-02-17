@@ -1,0 +1,15 @@
+{
+  "dependencies": {
+    "discord.js": "^14.18.0",
+    "dotenv": "^16.4.7"
+  },
+  "type": "module",
+  "scripts": {
+    "start": "node dist/index.js",
+    "build": "npx tsc"
+  },
+  
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}
