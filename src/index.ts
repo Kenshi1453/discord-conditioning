@@ -126,14 +126,12 @@ process.stdin.on("data", (d) => {
 function doTheFunny(q: AsyncQueue<QueueType>, callback: (v: QueueType) => number): () => void {
   return () => {
     q.dequeue().then(v => {
-      // console.log("Waiting for queue input...");
       const { intensity, duration, message, author } = v;
       if (!SHOULD_READ_QUEUE) {
         return waitUntil(() => SHOULD_READ_QUEUE).then(() => v);
       }
       return v
     }).then(v => {
-      // BLABLA GOT SHOCKED BY A 10S WITH INTENSITY 50 (DUE TO MESSAGE "blabla" [INSTANT]) SHOCK
       const sleepTime = callback(v);
       setTimeout(doTheFunny(q, callback), sleepTime)
     })
