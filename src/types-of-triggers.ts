@@ -1,4 +1,4 @@
-import { QueueType } from "./index.js";
+import { QueueItemType } from "./index.js";
 import { AsyncQueue } from "./queue.js";
 
 export interface BaseTrigger {
@@ -7,7 +7,7 @@ export interface BaseTrigger {
     triggers: (string | RegExp)[];
     shouldPrintCause: boolean;
 
-    checkMessageAndDoShit(message: string, queue: AsyncQueue<QueueType>, author: string): void;
+    checkMessageAndDoShit(message: string, queue: AsyncQueue<QueueItemType>, author: string): void;
 }
 
 abstract class ImmediateTrigger implements BaseTrigger {
@@ -23,7 +23,7 @@ abstract class ImmediateTrigger implements BaseTrigger {
         this.shouldPrintCause = shouldPrintCause;
     }
 
-    checkMessageAndDoShit(message: string, queue: AsyncQueue<QueueType>, author: string): void {
+    checkMessageAndDoShit(message: string, queue: AsyncQueue<QueueItemType>, author: string): void {
         const messageToPrint = `${this.duration}s WITH INTENSITY ${this.intensity}`
         const addition = this.shouldPrintCause ? ` (DUE TO MESSAGE "${message}" [INSTANT])` : ""
         for(let i = 0; i< this.doItTrigger(message); i++) {
@@ -34,6 +34,9 @@ abstract class ImmediateTrigger implements BaseTrigger {
     abstract doItTrigger(message: string): number;
 }
 
+/**
+ * A trigger that will trigger whenever the message does not include a certain string
+ */
 export class ImmediateMustHaveTrigger extends ImmediateTrigger {
     doItTrigger(message: string): number {
         for (const t of this.triggers) {
@@ -49,6 +52,9 @@ export class ImmediateMustHaveTrigger extends ImmediateTrigger {
     }
 }
 
+/**
+ * A trigger that will trigger __for each occurence__ of a string in a message
+ */
 export class ImmediateDontHaveTrigger extends ImmediateTrigger {
     doItTrigger(message: string): number {
         let count = 0;
@@ -62,6 +68,9 @@ export class ImmediateDontHaveTrigger extends ImmediateTrigger {
     }
 }
 
+/**
+ * A trigger that will continuously trigger if you type a certain string until you type another certain string
+ */
 export class ContinuousTrigger implements BaseTrigger {
     private interval: NodeJS.Timeout | undefined;
     intensity: number;
@@ -79,7 +88,7 @@ export class ContinuousTrigger implements BaseTrigger {
     }
 
 
-    checkMessageAndDoShit(message: string, queue: AsyncQueue<QueueType>, author: string): void {
+    checkMessageAndDoShit(message: string, queue: AsyncQueue<QueueItemType>, author: string): void {
         let solved: boolean = false;
         
         for (const save of this.stops) {
