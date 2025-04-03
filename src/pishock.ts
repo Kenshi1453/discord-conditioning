@@ -15,7 +15,6 @@ class PiShockAPI {
     this.USERNAME = USERNAME;
     this.SHARE_CODE = SHARE_CODE;
     this.API_URL = API_URL;
-    console.log(API_URL)
   }
 
   private async send(name: string, duration: number, intensity: number, op: SHOCK_OPERATIONS){

@@ -48,7 +48,7 @@ class AsyncQueue<T> implements AsyncIterator<T> {
         return [...this.list]
     }
 
-    async next(...[value]: [] | [any]): Promise<IteratorResult<T, any>> {
+    async next(...[_]: [] | [any]): Promise<IteratorResult<T, any>> {
         const v = await this.dequeue();
         return { value: v, done: false };
     }
