@@ -8,7 +8,8 @@ import { QueueLoop, QueueType } from "./queueloop.js";
 import { Source, SourceEventListener } from "./sources/source.js";
 import { DiscordClient } from "./discordclient.js";
 import { CODES_STORE } from "./stores/usercodes-store.js";
-import { QueueManager } from "./queuemanager.js";
+import { QueueManager } from "./managers/queuemanager.js";
+import { ShockManager } from "./managers/shockmanager.js";
 dotenv.config();
 
 export type QueueItemType = {
@@ -151,6 +152,7 @@ await readyPromise;
 const messageSource = new DiscordMessageSource(client);
 
 export const QUEUE_MANAGER = new QueueManager()
+export const SHOCK_MANAGER = new ShockManager()
 
 client.on("messageCreate", (mess) => {
   console.log("WTF MESSAGE HAPPENED")

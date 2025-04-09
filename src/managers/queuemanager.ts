@@ -1,7 +1,7 @@
-import { PiShockAPI } from "./pishock.js";
-import { AsyncQueue } from "./queue.js";
-import { QueueLoop, QueueType } from "./queueloop.js";
-import { CODES_STORE, CodesType } from "./stores/usercodes-store.js";
+import { PiShockAPI } from "../pishock.js";
+import { AsyncQueue } from "../queue.js";
+import { QueueLoop, QueueType } from "../queueloop.js";
+import { CODES_STORE, CodesData, CodesType } from "../stores/usercodes-store.js";
 import dotenv from 'dotenv'
 dotenv.config()
 
@@ -30,7 +30,7 @@ function createPishockQueueFactory(apiKey: string, username: string, apiUrl: str
 
 const createPishockQueue = createPishockQueueFactory(process.env.PISHOCK_API_KEY!, process.env.PISHOCK_USERNAME!, process.env.PISHOCK_API_URL!)
 
-function convertToKey(userId: string, type: CodesType['type']): string {
+function convertToKey(userId: string, type: CodesType): string {
     return `${userId}|${type}`
 }
 
@@ -41,7 +41,7 @@ export class QueueManager {
     /**
      * @throws {NoPishockCodeError}
      */
-    public getQueueOrCreate(userId: string, type: CodesType['type']){
+    public getQueueOrCreate(userId: string, type: CodesType){
         const key = convertToKey(userId, type)
         if(!this.userToQueueMap.has(key)) {
             this.addUserQueue(userId, type)
@@ -53,14 +53,13 @@ export class QueueManager {
     /**
      * @throws {NoPishockCodeError}
      */
-    private addUserQueue(userId: string, type: CodesType['type']) {
+    private addUserQueue(userId: string, type: CodesType) {
         const key = convertToKey(userId, type)
         if (this.userToQueueMap.has(key)) return
         let queue: QueueType
         switch(type){
             case "pishock":
-                const codes = CODES_STORE.get(userId) ?? []
-                const pishockCode = codes.find(e => e.type === 'pishock')
+                const pishockCode = CODES_STORE.getCode(userId, "pishock")
                 if(pishockCode === undefined) throw new NoPishockCodeError()
                 queue = createPishockQueue(pishockCode.shareCode, userId)
                 break;
@@ -73,7 +72,7 @@ export class QueueManager {
 
     }
 
-    public deleteUserQueue(userId: string, type: CodesType['type']) {
+    public deleteUserQueue(userId: string, type: CodesData['type']) {
         const key = convertToKey(userId, type)
         const queue = this.userToQueueMap.get(key)
         if(queue === undefined) return

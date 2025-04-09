@@ -1,10 +1,15 @@
-import { ActionRowBuilder, ApplicationCommandType, ButtonBuilder, ButtonStyle, CommandInteraction, ContextMenuCommandBuilder, MessageActionRowComponentBuilder, MessageComponentInteraction, MessageFlags, ModalActionRowComponentBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, UserContextMenuCommandInteraction } from "discord.js";
-import { QUEUE_MANAGER, QueueItemType } from "../../index.js";
-import { NoPishockCodeError } from "../../queuemanager.js";
-import { AsyncQueue } from "../../queue.js";
+import { ActionRowBuilder, ApplicationCommandType, ButtonBuilder, ButtonStyle, CommandInteraction, ContextMenuCommandBuilder, MessageActionRowComponentBuilder, MessageComponentInteraction, MessageFlags, ModalActionRowComponentBuilder, ModalBuilder, ModalSubmitInteraction, TextInputBuilder, TextInputStyle, UserContextMenuCommandInteraction } from "discord.js";
+import { SHOCK_MANAGER } from "../../index.js";
 import { CODES_STORE } from "../../stores/usercodes-store.js";
 
-async function doShock(queue: AsyncQueue<QueueItemType> | undefined, interaction: CommandInteraction | MessageComponentInteraction, userId: string, showShareCode: boolean) {
+type ShowModalReturnType<T> = T extends true
+    ? { modalInteraction: ModalSubmitInteraction, shockIntensityStr: string, shockDurationStr: string, shareCode: string }
+    : { modalInteraction: ModalSubmitInteraction, shockIntensityStr: string, shockDurationStr: string }
+
+async function showModalAndWait<T extends boolean>(
+    interaction: CommandInteraction | MessageComponentInteraction,
+    userId: string,
+    showShareCode: T): Promise<ShowModalReturnType<T>> {
     const modal = new ModalBuilder()
         .setCustomId('selectShockParams')
         .setTitle("Select Shock Parameters")
@@ -12,23 +17,17 @@ async function doShock(queue: AsyncQueue<QueueItemType> | undefined, interaction
     // Create the text input components
     const modalShockDuration = new TextInputBuilder()
         .setCustomId('shockDuration')
-        // The label is the prompt the user sees for this input
         .setLabel("The shock duration (integer between 1-15)")
-        // Short means only a single line of text
         .setStyle(TextInputStyle.Short);
 
     const modalShockIntensity = new TextInputBuilder()
         .setCustomId('shockIntensity')
         .setLabel("The shock intensity (integer between 1-100)")
-        // Paragraph means multiple lines of text.
         .setStyle(TextInputStyle.Short);
 
-    // An action row only holds one text input,
-    // so you need one action row per text input.
     const firstActionRow = new ActionRowBuilder<ModalActionRowComponentBuilder>().addComponents(modalShockDuration);
     const secondActionRow = new ActionRowBuilder<ModalActionRowComponentBuilder>().addComponents(modalShockIntensity);
 
-    // Add inputs to the modal
     if (showShareCode) {
         const shareCodeInput = new TextInputBuilder()
             .setCustomId('shareCode')
@@ -40,36 +39,50 @@ async function doShock(queue: AsyncQueue<QueueItemType> | undefined, interaction
 
 
     await interaction.showModal(modal)
-    const modalResultInteraction = await interaction.awaitModalSubmit({ time: 30_000, filter: (interaction) => interaction.customId === 'selectShockParams' })
-    const shockDuration = Number.parseInt(modalResultInteraction.fields.getTextInputValue('shockDuration'))
-    const shockIntensity = Number.parseInt(modalResultInteraction.fields.getTextInputValue('shockIntensity'))
+    const modalInteraction = await interaction.awaitModalSubmit({ time: 30_000, filter: (interaction) => interaction.customId === 'selectShockParams' })
 
-    if (Number.isNaN(shockDuration) || Number.isNaN(shockIntensity) || shockDuration < 1 || shockDuration > 15 || shockIntensity < 1 || shockIntensity > 100) {
-        await modalResultInteraction.reply({ content: "Wrong types for the shock! Please relaunch the shock I can't open a new modal :pensive:", flags: MessageFlags.Ephemeral })
-        return;
+    // Tell typescript to shut the fuck up
+    return {
+        shockDurationStr: modalInteraction.fields.getTextInputValue("shockDuration"),
+        shockIntensityStr: modalInteraction.fields.getTextInputValue("shockIntensity"),
+        shareCode: showShareCode ? modalInteraction.fields.getTextInputValue("shareCode") : undefined,
+        modalInteraction: modalInteraction
+    } as ShowModalReturnType<T>
+}
+
+class WrongInputError extends Error { }
+
+/**
+ * Precond: userId already has a pishock code
+ * 
+ * @throws {WrongInputError}
+ */
+function queueShock(userId: string, shockIntensityStr: string, shockDurationStr: string) {
+    const intRegex = /^[0-9]+$/
+    if (!intRegex.test(shockIntensityStr) || !intRegex.test(shockDurationStr)) {
+        throw new WrongInputError("Please input integers in the text fields thanks :slight_smile:. Need to re-execute the command can't reopen a modal after a modal.")
     }
-    if (showShareCode) {
-        const shareCode = modalResultInteraction.fields.getTextInputValue('shareCode')
-        const arr = CODES_STORE.get(userId) ?? []
-        arr.push({type: 'pishock', shareCode})
-        CODES_STORE.set(userId, arr)
-        queue = QUEUE_MANAGER.getQueueOrCreate(userId, 'pishock')
+    const shockIntensity = Number.parseInt(shockIntensityStr)
+    const shockDuration = Number.parseInt(shockDurationStr)
+    if (shockIntensity < 1 || shockIntensity > 100 || shockDuration < 1 || shockDuration > 15) {
+        throw new WrongInputError("shockIntensity must be between 1-100 and shockDuration must be between 1-15. Redo the command.")
     }
-    if (queue === undefined) throw new Error("Nuh uh")
-    const oldQueueLength = queue.getCurrentState().length
-    queue.enqueue({ author: 'funni', duration: shockDuration, intensity: shockIntensity, message: "fun" })
-    await modalResultInteraction.reply({ content: `Queued! There are currently ${oldQueueLength} items queued before that one`, flags: MessageFlags.Ephemeral })
+    SHOCK_MANAGER.queueShock(userId, shockIntensity, shockDuration)
 }
 
 export async function execute(interaction: CommandInteraction) {
     if (!(interaction instanceof UserContextMenuCommandInteraction)) return;
 
-
-    try {
-        const queue = QUEUE_MANAGER.getQueueOrCreate(interaction.targetId, 'pishock')
-        await doShock(queue, interaction, interaction.targetId, false)
-    } catch (e) {
-        if (!(e instanceof NoPishockCodeError)) throw e
+    if (CODES_STORE.hasCode(interaction.targetId, "pishock")) {
+        const { modalInteraction, shockIntensityStr, shockDurationStr } = await showModalAndWait(interaction, interaction.targetId, false)
+        try {
+            queueShock(interaction.targetId, shockIntensityStr, shockDurationStr)
+            modalInteraction.reply({content: "The shock has been successfully queued!", flags: MessageFlags.Ephemeral})
+        }catch(e){
+            if(!(e instanceof WrongInputError)) throw e
+            modalInteraction.reply({content: `ERROR! ${e.message}`, flags: MessageFlags.Ephemeral})
+        }
+    } else {
         const yes = new ButtonBuilder()
             .setCustomId('yes')
             .setLabel('Yes')
@@ -87,15 +100,25 @@ export async function execute(interaction: CommandInteraction) {
             flags: MessageFlags.Ephemeral, components: [row],
             withResponse: true
         })
+        let confirmation: MessageComponentInteraction
         try {
-            const confirmation = await response.resource!.message!.awaitMessageComponent({ filter: i => i.user.id === interaction.user.id, time: 60_000 });
-            if (confirmation.customId === 'yes') {
-                doShock(undefined, confirmation, interaction.targetId, true)
-            } else {
-                confirmation.reply({content: "Too bad... Maybe next time :pleading_face:", flags: MessageFlags.Ephemeral})
-            }
+            confirmation = await response.resource!.message!.awaitMessageComponent({ filter: i => i.user.id === interaction.user.id, time: 60_000 });
         } catch {
             await interaction.editReply({ content: 'Confirmation not received within 1 minute, cancelling', components: [] });
+            return;
+        }
+        if (confirmation.customId === 'yes') {
+            const { modalInteraction, shockIntensityStr, shockDurationStr, shareCode } = await showModalAndWait(confirmation, interaction.targetId, true)
+            CODES_STORE.setCode(interaction.targetId, "pishock", {shareCode})
+            try {
+                queueShock(interaction.targetId, shockIntensityStr, shockDurationStr)
+                modalInteraction.reply({content: "The shock has been successfully queued!", flags: MessageFlags.Ephemeral})
+            }catch(e){
+                if(!(e instanceof WrongInputError)) throw e
+                modalInteraction.reply({content: `ERROR! ${e.message}`, flags: MessageFlags.Ephemeral})
+            }
+        } else {
+            confirmation.reply({ content: "Too bad... Maybe next time :pleading_face:", flags: MessageFlags.Ephemeral })
         }
 
     }
