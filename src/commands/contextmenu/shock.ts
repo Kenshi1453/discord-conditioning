@@ -8,7 +8,6 @@ type ShowModalReturnType<T> = T extends true
 
 async function showModalAndWait<T extends boolean>(
     interaction: CommandInteraction | MessageComponentInteraction,
-    userId: string,
     showShareCode: T): Promise<ShowModalReturnType<T>> {
     const modal = new ModalBuilder()
         .setCustomId('selectShockParams')
@@ -74,7 +73,7 @@ export async function execute(interaction: CommandInteraction) {
     if (!(interaction instanceof UserContextMenuCommandInteraction)) return;
 
     if (CODES_STORE.hasCode(interaction.targetId, "pishock")) {
-        const { modalInteraction, shockIntensityStr, shockDurationStr } = await showModalAndWait(interaction, interaction.targetId, false)
+        const { modalInteraction, shockIntensityStr, shockDurationStr } = await showModalAndWait(interaction, false)
         try {
             queueShock(interaction.targetId, shockIntensityStr, shockDurationStr)
             modalInteraction.reply({content: "The shock has been successfully queued!", flags: MessageFlags.Ephemeral})
@@ -108,7 +107,7 @@ export async function execute(interaction: CommandInteraction) {
             return;
         }
         if (confirmation.customId === 'yes') {
-            const { modalInteraction, shockIntensityStr, shockDurationStr, shareCode } = await showModalAndWait(confirmation, interaction.targetId, true)
+            const { modalInteraction, shockIntensityStr, shockDurationStr, shareCode } = await showModalAndWait(confirmation, true)
             CODES_STORE.setCode(interaction.targetId, "pishock", {shareCode})
             try {
                 queueShock(interaction.targetId, shockIntensityStr, shockDurationStr)
